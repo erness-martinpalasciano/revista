@@ -14,9 +14,9 @@
   CC.search = function (q) {
     var au = norm(q.author), tp = norm(q.topic);
     return CC.articles.filter(function (a) {
-      return (!au || norm(a.author).indexOf(au) !== -1) &&
+      return (!au || norm(a.authors.join(' ')).indexOf(au) !== -1) &&
              (!tp || norm(a.title + ' ' + a.topic).indexOf(tp) !== -1) &&
-             (!q.date || a.date === q.date);
+             (!q.date || a.dateISO === q.date);
     });
   };
 

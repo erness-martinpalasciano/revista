@@ -1,44 +1,53 @@
 # Revista Científica · ConCiencia
 
-Sección de Revista Científica del Club de Ciencias ConCiencia (HTML + CSS + JavaScript, sin dependencias externas).
+Sección de Revista Científica del Club de Ciencias ConCiencia. HTML + CSS + JavaScript; los artículos se leen **directamente desde PDF**.
 
-## Cómo ejecutarla
-- **Opción simple:** abrí `index.html` con doble clic en tu navegador (funciona sin servidor).
-- **Opción recomendada para publicar o probar en el celular:** desde esta carpeta ejecutá `python3 -m http.server 8000` y entrá a `http://localhost:8000`. También podés subir la carpeta entera a Netlify.
+## Cómo ejecutarla (importante)
+Los PDF se leen con PDF.js, que necesita un servidor local (no funciona abriendo `index.html` con doble clic).
+- **Visual Studio Code:** instalá la extensión *Live Server*, clic derecho en `index.html` → *Open with Live Server*.
+- **Alternativa:** en esta carpeta ejecutá `python3 -m http.server 8000` y entrá a `http://localhost:8000`.
+- **Publicar:** subí la carpeta completa a Netlify (o cualquier hosting estático).
 
 ## Estructura
 ```
 revista/
 ├── index.html
-├── css/styles.css        ← colores y tipografías en las variables de :root
+├── css/styles.css          ← colores y tipografías: variables de :root
 ├── js/
-│   ├── articles.js       ← ÚNICO lugar donde se registran los artículos
-│   ├── flipbook.js       ← motor de revista 3D (propio, sin librerías)
-│   ├── search.js         ← buscador por autor, tema/título y fecha
-│   ├── assistant.js      ← Marie Curie (preguntas frecuentes)
-│   └── main.js           ← rutas, menú, lector, sonido
+│   ├── articles.js         ← ÚNICO lugar donde se registran los artículos
+│   ├── pdf-source.js       ← lee el PDF (páginas, proporciones) con PDF.js
+│   ├── flipbook.js         ← revista 3D: hoja con curvatura, sombras y sonido
+│   ├── zoom.js             ← lectura ampliada (solo lectura)
+│   ├── search.js           ← buscador por autor, tema/título y fecha
+│   ├── assistant.js        ← Marie Curie: preguntas frecuentes y mensajes
+│   └── main.js             ← rutas, menú, lector
 ├── assets/
-│   ├── images/           ← portada, marie.png, covers/
-│   ├── articles/<id>/    ← páginas de cada revista (01.jpg, 02.jpg…)
-│   └── sounds/page-flip.wav
+│   ├── articles/article-00.pdf   ← REEMPLAZALO por el PDF real
+│   ├── images/             ← article-00-cover.jpg, marie.png
+│   ├── sounds/page-flip-1…4.wav  ← reemplazables (se elige uno al azar)
+│   └── vendor/pdfjs/       ← PDF.js (local, no usa internet)
 └── README.md
 ```
 
-## Cómo agregar un artículo nuevo
-1. Exportá la revista como imágenes (una por página, misma proporción; proporción 8:11; para lectura ampliada nítida conviene ≥ 1240×1705 px, JPG) y guardalas en `assets/articles/<id>/` con nombres `01.jpg`, `02.jpg`, …
-2. Guardá la miniatura de portada (ideal 480×660 px) en `assets/images/covers/<id>.jpg`.
-3. En `js/articles.js`, copiá un objeto del arreglo `RAW` y completá: `id`, `title`, `author`, `date` (AAAA-MM-DD), `topic`, `cover`, `pagesPath`, `pageCount`, `number`.
-4. Listo: aparece en la galería, el buscador y en "Más artículos de este/a estudiante" (se agrupan por nombre de autor, escrito igual).
-`author` y `date` pueden quedar vacíos (no se muestra nada). Para borrar el de demostración, eliminá el objeto `demo-01` y su carpeta.
+## Reemplazar el PDF del artículo 00
+Copiá tu PDF a `assets/articles/article-00.pdf` (mismo nombre) y listo.
+
+## Agregar un artículo nuevo (3 pasos)
+1. Poné el PDF en `assets/articles/` (ej.: `article-01.pdf`).
+2. Poné la portada en `assets/images/` (ej.: `article-01-cover.jpg`; si no la ponés, se genera con la página 1 del PDF).
+3. En `js/articles.js` copiá el objeto del arreglo `RAW` y cambiá los datos:
+```js
+{ id: '01', title: 'Título', authors: ['Nombre Apellido'], date: '15/11/2026',
+  category: 'Química', cover: 'assets/images/article-01-cover.jpg', pdf: 'assets/articles/article-01.pdf' }
+```
+La cantidad de páginas y sus proporciones (A4 vertical, horizontal, mezcladas) se detectan solas; nunca se estiran ni recortan (si una página difiere de la portada, se centra con márgenes). Galería, buscador, autores y lector se arman solos. `id` es también el número de la miniatura.
+
+## Marie Curie
+- Preguntas frecuentes y respuestas: copiadas del sitio original (`FAQ` en `assistant.js`).
+- **Mensajes espontáneos:** pegá los textos originales en el arreglo `MESSAGES` de `assistant.js`. Aparecen en la galería (nunca durante la lectura). Frecuencia: `FIRST_DELAY`, `EVERY`, `VISIBLE`.
 
 ## Lectura ampliada
-Doble clic (o doble toque) sobre el centro de una página, o el botón «Ampliar», abre una vista de solo lectura con scroll; se sale con el botón o Escape y la revista vuelve a la misma página.
-
-## Qué reemplazar
-- **Tipografías y colores:** son aproximados. Editá `--font-script`, `--font-body` y los colores en `:root` (`css/styles.css`).
-- **Marie Curie:** `assets/images/marie.png` es un recorte de una captura; reemplazalo por el original (`Marie.png` del sitio).
-- **Sonido:** `assets/sounds/page-flip.wav` es sintetizado; podés reemplazarlo por un sonido real con el mismo nombre.
-- **Portada:** `assets/images/portada.jpg` es una ilustración generada; cambiala por la definitiva.
+Doble clic (o doble toque) en el centro de una página, o botón «Ampliar». Solo lectura, con scroll; se sale con el botón o Escape y vuelve a la misma página.
 
 ## Tecnologías
-HTML5 semántico, CSS3 (variables, grid, transformaciones 3D) y JavaScript vanilla (rutas por hash, Pointer Events para mouse y táctil). Sin bibliotecas externas.
+HTML5, CSS3 (3D), JavaScript vanilla y PDF.js (Mozilla, licencia Apache 2.0, en `assets/vendor/pdfjs/`). El efecto de volteo es propio: la hoja se divide en tiras que se curvan, con sombras dinámicas.

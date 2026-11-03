@@ -1,8 +1,11 @@
 /* ==========================================================
    articles.js — ÚNICO lugar donde se registran los artículos.
-   Para agregar uno: copiá un objeto de RAW, cambiá los datos y
-   dejá sus páginas en assets/articles/<id>/01.jpg, 02.jpg, …
-   Todo lo demás (galería, buscador, autores, lector) se arma solo.
+
+   Para agregar una publicación:
+     1) Copiá el PDF a assets/articles/  (ej.: article-01.pdf)
+     2) Copiá su portada a assets/images/ (ej.: article-01-cover.jpg)
+     3) Agregá un objeto a RAW (copiá el anterior y cambiá los datos).
+   El resto (galería, buscador, autores, lector) se arma solo.
    ========================================================== */
 (function () {
   'use strict';
@@ -10,19 +13,15 @@
 
   var RAW = [
     {
-      id: 'demo-01',                      // identificador único (se usa en la URL)
+      id: '00',                                   // identificador (también es el número de la miniatura)
       title: 'La historia del club de ciencias ConCiencia',
-      author: '',                         // vacío por ahora (completar con el nombre del estudiante)
-      date: '',                           // vacío por ahora (formato AAAA-MM-DD)
-      topic: 'Club de ciencias',
-      cover: 'assets/images/covers/demo-01.jpg',
-      pagesPath: 'assets/articles/demo-01/', // carpeta con las páginas
-      pageCount: 8,                       // 01.jpg … 08.jpg
-      pageExt: 'jpg',
-      number: '00',                       // identificación numérica de la miniatura
-      demo: true
+      authors: ['Eduardo Zorzoli', 'Gustavo Fernández', 'Agustín Moya'],
+      date: '06/11/2026',                         // DD/MM/AAAA (también acepta AAAA-MM-DD)
+      category: 'Institucional',
+      cover: 'assets/images/article-00-cover.jpg', // opcional: si falta, se genera con la página 1 del PDF
+      pdf: 'assets/articles/article-00.pdf'
     }
-    // Alternativa a pagesPath/pageCount: pages: ['ruta/p1.jpg', 'ruta/p2.jpg', …]
+    // Alternativa sin PDF: pages: ['ruta/p1.jpg', 'ruta/p2.jpg', …]
   ];
 
   /** Texto → identificador sin tildes ni espacios ("Ana Pérez" → "ana-perez"). */
@@ -31,26 +30,53 @@
       .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   };
 
-  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  /** Fecha DD/MM/AAAA o AAAA-MM-DD → { iso, text }. Vacía si no hay fecha. */
+  function parseDate(s) {
+    s = String(s || '').trim(); var m;
+    if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) return { iso: m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2), text: ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + m[3] };
+    if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return { iso: s, text: m[3] + '/' + m[2] + '/' + m[1] };
+    return { iso: '', text: '' };
+  }
 
-  /** Normaliza cada artículo: calcula autor-slug y lista de páginas. */
-  CC.articles = RAW.map(function (a) {
-    var pages = a.pages;
-    if (!pages) {
-      pages = [];
-      for (var i = 1; i <= a.pageCount; i++) pages.push(a.pagesPath + pad(i) + '.' + (a.pageExt || 'jpg'));
-    }
-    var o = {};
-    for (var k in a) o[k] = a[k];
-    o.pages = pages; o.pageCount = pages.length; o.authorSlug = a.author ? CC.slug(a.author) : '';
+  /** Completa los campos derivados de un artículo. */
+  function normalize(a) {
+    var o = {}, k;
+    for (k in a) o[k] = a[k];
+    var authors = a.authors || (a.author ? [a.author] : []);
+    o.authors = authors.filter(Boolean);
+    o.authorSlugs = o.authors.map(CC.slug);
+    var d = parseDate(a.date); o.dateISO = d.iso; o.dateText = d.text;
+    o.topic = a.category || a.topic || '';
+    o.number = a.number || a.id;
+    o.pages = a.pages || null;
     return o;
-  }).sort(function (x, y) { return (y.date || '').localeCompare(x.date || ''); }); // más recientes primero
+  }
+
+  CC.articles = [];
+  /** Agrega un artículo en tiempo de ejecución (también lo usa la lista RAW). */
+  CC.addArticle = function (raw) {
+    CC.articles.push(normalize(raw));
+    CC.articles.sort(function (x, y) { return (y.dateISO || '').localeCompare(x.dateISO || ''); });
+  };
+  RAW.forEach(CC.addArticle);
 
   CC.getArticle = function (id) {
     return CC.articles.filter(function (a) { return a.id === id; })[0] || null;
   };
   /** Relación autor → artículos, generada automáticamente. */
   CC.byAuthor = function (slug) {
-    return slug ? CC.articles.filter(function (a) { return a.authorSlug === slug; }) : [];
+    return slug ? CC.articles.filter(function (a) { return a.authorSlugs.indexOf(slug) !== -1; }) : [];
+  };
+  /** Nombre visible de un autor a partir de su slug. */
+  CC.authorName = function (slug) {
+    for (var i = 0; i < CC.articles.length; i++) {
+      var j = CC.articles[i].authorSlugs.indexOf(slug);
+      if (j !== -1) return CC.articles[i].authors[j];
+    }
+    return '';
+  };
+  /** "A, B y C" */
+  CC.joinNames = function (list) {
+    return list.length < 2 ? (list[0] || '') : list.slice(0, -1).join(', ') + ' y ' + list[list.length - 1];
   };
 })();

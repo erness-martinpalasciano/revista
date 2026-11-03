@@ -91,6 +91,7 @@
         </div>
       </div>
       <div class="fb-stage" id="fbStage" tabindex="0" aria-label="Revista digital. Usá las flechas del teclado, deslizá o hacé clic en los bordes para pasar de página. Doble clic sobre una página para ampliar la lectura.">
+        <p class="fb-status" id="fbStatus" role="status" hidden></p>
         <button type="button" class="side-arrow left" id="fbPrev" aria-label="Página anterior">‹</button>
         <div class="fb-book" id="fbBook"></div>
         <button type="button" class="side-arrow right" id="fbNext" aria-label="Página siguiente">›</button>
@@ -106,7 +107,7 @@
         <section class="author-info" id="authorInfo" aria-label="Información del artículo">
           <p id="infoAuthor"></p>
           <p id="infoDate"></p>
-          <a class="pill solid" id="moreByAuthor" href="#/">Más artículos escritos por este/a estudiante</a>
+          <div id="moreBy" class="more-by"></div>
         </section>
       </div>
     </section>
@@ -193,6 +194,7 @@
 
   <!-- Orden de carga: datos → módulos → arranque -->
   <script src="js/articles.js"></script>
+  <script src="js/pdf-source.js"></script>
   <script src="js/flipbook.js"></script>
   <script src="js/zoom.js"></script>
   <script src="js/search.js"></script>

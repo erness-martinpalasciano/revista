@@ -71,7 +71,7 @@ h2{font-size:clamp(1.9rem,4.5vw,2.6rem)}
 .card{position:relative;display:block;text-decoration:none;background:var(--paper);border:3px solid #fff;border-radius:30px;overflow:hidden;
   box-shadow:0 0 0 2px var(--line),7px 7px 0 var(--shadow);transition:transform .2s,box-shadow .2s}
 .card:hover,.card:focus-visible{transform:translateY(-4px);box-shadow:0 0 0 2px var(--line),7px 11px 0 var(--shadow)}
-.card-img{aspect-ratio:3/4;overflow:hidden;background:#eee}
+.card-img{aspect-ratio:5/7;overflow:hidden;background:#eee}
 .card-img img{width:100%;height:100%;object-fit:cover}
 .card-body{padding:14px 96px 18px 16px;min-height:78px}
 .card h3{font-size:1.05rem;margin:0 0 4px}.card p{margin:0;font-size:.9rem;color:var(--muted)}.card .by{font-weight:800;color:var(--purple)}
@@ -115,14 +115,15 @@ body.reading .tile b{font-size:22px}body.reading .tile small{font-size:7px}body.
 body.reading .logo{font-size:2rem}body.reading .round:not(.sm){width:46px;height:46px}
 .fb-stage{position:relative;height:70vh;margin:4px auto 0;max-width:1280px;width:100%;perspective:2600px;perspective-origin:50% 45%;
   display:grid;place-items:center;touch-action:pan-y;user-select:none;-webkit-user-select:none;overflow:hidden}
-.fb-stage:focus{outline:none}.fb-stage:focus-visible{outline:2px dashed var(--violet);outline-offset:-4px}
+.fb-stage:focus{outline:none}.fb-stage:focus-visible{outline:none}
 .fb-book{position:relative;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.4,.1,.2,1)}
-.fb-book::before{content:"";position:absolute;inset:3% 1% -3% 1%;background:rgba(40,25,70,.35);filter:blur(22px);transform:translateZ(-2px);border-radius:12px}
-.fb-book.at-start::before{left:50%}.fb-book.at-end::before{right:50%}
+.fb-book::before,.fb-book::after{content:"";position:absolute;top:3%;bottom:-3%;background:rgba(40,25,70,.35);filter:blur(22px);transform:translateZ(-2px);transition:opacity .6s}
+.fb-book::before{left:1%;width:49%}.fb-book::after{left:50%;right:1%}
+.fb-book.at-start::before,.fb-book.at-end::after{opacity:0}
 .leaf{position:absolute;top:0;transform-origin:left center;transform-style:preserve-3d;will-change:transform}
 .face{position:absolute;inset:0;overflow:hidden;backface-visibility:hidden;-webkit-backface-visibility:hidden;background:#fffdf4}
 .face.back{transform:rotateY(180deg)}
-.face img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+.face img{width:100%;height:100%;object-fit:contain;pointer-events:none}
 .face.blank{background:linear-gradient(#fffdf4,#f4efdc)}
 .face::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.28),rgba(0,0,0,0) 7%,rgba(0,0,0,0) 94%,rgba(0,0,0,.06))}
 .face.back::after{background:linear-gradient(270deg,rgba(0,0,0,.28),rgba(0,0,0,0) 7%,rgba(0,0,0,0) 94%,rgba(0,0,0,.06))}
@@ -206,3 +207,27 @@ body.zooming{overflow:hidden}
 .zoom-page{display:block;width:min(900px,calc(100% - 24px));height:auto;margin:16px auto;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25),0 6px 20px rgba(0,0,0,.15);
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .round:disabled{opacity:.35;cursor:default}
+
+/* Hojas curvadas (tiras articuladas), sombra proyectada y carga */
+.flat{position:absolute;inset:0;transform-style:preserve-3d}
+.curl{position:absolute;inset:0;transform-style:preserve-3d}
+.strip{position:absolute;top:0;height:100%;transform-origin:left center;transform-style:preserve-3d}
+.sf,.sb{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;background-color:#fffdf4;background-repeat:no-repeat}
+.sb{transform:rotateY(180deg)}
+.cast{position:absolute;top:0;pointer-events:none;opacity:0;z-index:999}
+.cast-r{background:linear-gradient(90deg,rgba(0,0,0,.04),rgba(0,0,0,.6))}
+.cast-l{background:linear-gradient(90deg,rgba(0,0,0,.6),rgba(0,0,0,.04))}
+.face.loading::before{content:"Cargando página…";position:absolute;inset:0;display:grid;place-items:center;color:#8a8696;font-size:clamp(11px,1.4vw,15px)}
+.fb-status{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 12%;margin:0;color:var(--muted);font-weight:700;z-index:4000}
+.more-by{margin-top:10px}.more-label{font-weight:800;margin:0 0 8px}
+.more-list{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.zoom-wait{text-align:center;padding:30px;color:var(--muted);font-weight:700}
+.zoom-nav .round{font-size:1.5rem}
+.zoom-scroll{overflow-x:auto}
+.zoom-page{width:auto;max-width:none}
+/* Marie: globo espontáneo y espacio para no tapar los controles de la revista */
+.marie-bubble{position:absolute;right:6px;bottom:92px;width:max-content;max-width:min(78vw,300px);background:#fff;color:var(--ink);padding:12px 16px;
+  border-radius:22px 22px 6px 22px;box-shadow:0 0 0 2px var(--line),0 10px 24px rgba(0,0,0,.2);font-weight:700;font-size:.95rem;line-height:1.4;
+  opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .3s,transform .3s,visibility 0s .3s;cursor:pointer}
+.marie-bubble.show{opacity:1;visibility:visible;transform:none;transition:opacity .3s,transform .3s}
+@media(max-width:1000px){body.reading .fb-dock{padding-right:92px}}

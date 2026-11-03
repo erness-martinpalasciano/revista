@@ -1,6 +1,6 @@
 /* ==========================================================
    main.js — Arranque y conexión de módulos.
-   Rutas por hash (funcionan también abriendo index.html directo):
+   Rutas por hash:
      #/                  galería
      #/articulo/<id>     lector de revista
      #/autor/<slug>      artículos de un mismo estudiante
@@ -10,33 +10,41 @@
   var CC = window.CC, doc = document;
   function $(s) { return doc.querySelector(s); }
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-
-  CC.fmtDate = function (iso) {
-    if (!iso) return '';
-    var p = iso.split('-');
-    return new Date(+p[0], +p[1] - 1, +p[2]).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
-  };
+  var BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 
   /* ---------- miniaturas ---------- */
   function card(a) {
+    var cover = a.cover ? 'src="' + esc(a.cover) + '"' : 'src="' + BLANK + '" data-cover="' + esc(a.id) + '"';
     return '<a class="card" href="#/articulo/' + encodeURIComponent(a.id) + '">' +
-      '<div class="card-img"><img src="' + esc(a.cover) + '" alt="Portada de ' + esc(a.title) + '" loading="lazy" width="480" height="660"></div>' +
+      '<div class="card-img"><img ' + cover + ' alt="Portada de ' + esc(a.title) + '" loading="lazy" width="480" height="672"></div>' +
       '<div class="card-body"><h3>' + esc(a.title) + '</h3>' +
-      (a.author ? '<p class="by">' + esc(a.author) + '</p>' : '') +
-      (a.date ? '<p><time datetime="' + a.date + '">' + CC.fmtDate(a.date) + '</time></p>' : '') + '</div>' +
-      '<span class="num" title="Identificación">' + esc(a.number || '00') + '</span></a>';
+      (a.authors.length ? '<p class="by">' + esc(CC.joinNames(a.authors)) + '</p>' : '') +
+      (a.dateText ? '<p><time datetime="' + a.dateISO + '">' + a.dateText + '</time></p>' : '') + '</div>' +
+      '<span class="num" title="Identificación">' + esc(a.number) + '</span></a>';
+  }
+  /** Si un artículo no trae portada, se genera con la página 1 de su PDF. */
+  function fillCovers(root) {
+    root.querySelectorAll('img[data-cover]').forEach(function (im) {
+      var a = CC.getArticle(im.getAttribute('data-cover')); im.removeAttribute('data-cover');
+      if (a && a.pdf) CC.coverFromPdf(a, 480).then(function (u) { im.src = u; }).catch(function () {});
+    });
   }
   CC.renderCards = function (el, list) {
     el.innerHTML = list.length ? list.map(card).join('') : '<p class="empty">No encontramos artículos con esos datos. Probá con otro autor, tema o fecha.</p>';
+    fillCovers(el);
   };
 
-  /* ---------- sonido de hojas (con silencio recordado) ---------- */
-  var snd = { muted: false, base: new Audio('assets/sounds/page-flip.wav') };
-  snd.base.preload = 'auto';
+  /* ---------- sonido de hojas: 4 variantes locales, volumen y velocidad levemente distintos ---------- */
+  var snd = { muted: false, pool: [] };
+  for (var i = 1; i <= 4; i++) { var au = new Audio('assets/sounds/page-flip-' + i + '.wav'); au.preload = 'auto'; snd.pool.push(au); }
   try { snd.muted = localStorage.getItem('cc-muted') === '1'; } catch (e) {}
-  snd.play = function () {
+  /** durMs: duración del giro; el sonido se ajusta para terminar junto con el movimiento. */
+  snd.play = function (durMs) {
     if (snd.muted) return;
-    var a = snd.base.cloneNode(); a.volume = 0.8;
+    var base = snd.pool[Math.floor(Math.random() * snd.pool.length)], a = base.cloneNode();
+    var rate = 0.94 + Math.random() * 0.12;
+    if (durMs && base.duration) rate = Math.max(0.8, Math.min(1.3, base.duration * 1000 / durMs * (0.97 + Math.random() * 0.06)));
+    a.playbackRate = rate; a.volume = 0.5 + Math.random() * 0.15;
     var p = a.play(); if (p && p.catch) p.catch(function () {});
   };
   var btnSound = $('#fbSound');
@@ -72,37 +80,70 @@
   });
 
   /* ---------- lector de revista ---------- */
-  var fb = null, currentArticle = null, views = { home: $('#viewHome'), reader: $('#viewReader'), author: $('#viewAuthor') };
-  var range = $('#fbRange'), prevB = $('#fbPrev'), nextB = $('#fbNext');
+  var fb = null, src = null, token = 0, currentArticle = null;
+  var views = { home: $('#viewHome'), reader: $('#viewReader'), author: $('#viewAuthor') };
+  var range = $('#fbRange'), prevB = $('#fbPrev'), nextB = $('#fbNext'), status = $('#fbStatus');
 
+  function closeReader() {
+    token++;
+    if (fb) { fb.destroy(); fb = null; }
+    if (src) { src.destroy(); src = null; }
+  }
   function show(name) {
     Object.keys(views).forEach(function (k) { views[k].hidden = k !== name; });
     doc.body.classList.toggle('reading', name === 'reader');
-    if (fb && name !== 'reader') { fb.destroy(); fb = null; }
+    if (name !== 'reader') closeReader();
+  }
+
+  function moreBy(a) {
+    var box = $('#moreBy');
+    if (!a.authors.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    if (a.authors.length === 1) {
+      box.innerHTML = '<a class="pill solid" href="#/autor/' + a.authorSlugs[0] + '">Más artículos escritos por este/a estudiante</a>';
+    } else {
+      box.innerHTML = '<p class="more-label">Más artículos escritos por estos/as estudiantes:</p><div class="more-list">' +
+        a.authors.map(function (n, i) { return '<a class="pill solid" href="#/autor/' + a.authorSlugs[i] + '">' + esc(n) + '</a>'; }).join('') + '</div>';
+    }
   }
 
   function openReader(a) {
-    show('reader');
+    closeReader(); show('reader');
+    var my = token;
+    currentArticle = a;
     doc.title = a.title + ' · Revista Científica ConCiencia';
     $('#readerTitle').textContent = a.title;
-    // Autor y fecha: si están vacíos, no se muestra ninguna etiqueta ni texto de relleno.
-    $('#infoAuthor').textContent = a.author ? 'Artículo escrito por: ' + a.author : '';
-    $('#infoAuthor').hidden = !a.author;
-    $('#infoDate').textContent = a.date ? 'Fecha de publicación: ' + CC.fmtDate(a.date) : '';
-    $('#infoDate').hidden = !a.date;
-    $('#moreByAuthor').href = '#/autor/' + a.authorSlug; $('#moreByAuthor').hidden = !a.authorSlug;
-    $('#authorInfo').hidden = !a.author && !a.date;
+    // Autores y fecha: si faltan, no se muestra ninguna etiqueta ni texto de relleno.
+    $('#infoAuthor').textContent = a.authors.length ? 'Artículo escrito por: ' + CC.joinNames(a.authors) : '';
+    $('#infoAuthor').hidden = !a.authors.length;
+    $('#infoDate').textContent = a.dateText ? 'Fecha de publicación: ' + a.dateText : '';
+    $('#infoDate').hidden = !a.dateText;
+    moreBy(a);
+    $('#authorInfo').hidden = !a.authors.length && !a.dateText;
+    range.max = 1; range.value = 0; $('#fbIndicator').textContent = '';
+    prevB.disabled = nextB.disabled = true;
+    status.hidden = false; status.textContent = 'Cargando revista…';
     fitStage();
-    fb = CC.createFlipbook({
-      stage: $('#fbStage'), book: $('#fbBook'), pages: a.pages, title: a.title, sound: snd,
-      onZoom: function (i) { zoomPage(a, i); },
-      onChange: function (s) {
-        range.max = s.max; range.value = s.t; $('#fbIndicator').textContent = s.label;
-        prevB.disabled = s.atStart; nextB.disabled = s.atEnd;
-      }
+    CC.openSource(a).then(function (s) {
+      if (my !== token) { s.destroy(); return; }
+      src = s; status.hidden = true;
+      fb = CC.createFlipbook({
+        stage: $('#fbStage'), book: $('#fbBook'), source: s, title: a.title, sound: snd,
+        onZoom: function (i) { zoomPage(a, i); },
+        onChange: function (st) {
+          range.max = st.max; range.value = st.t; $('#fbIndicator').textContent = st.label;
+          prevB.disabled = st.atStart; nextB.disabled = st.atEnd;
+        }
+      });
+      $('#fbStage').focus({ preventScroll: true });
+    }).catch(function (err) {
+      if (my !== token) return;
+      status.hidden = false;
+      status.textContent = location.protocol === 'file:'
+        ? 'Para leer un PDF hay que abrir la revista desde un servidor (por ejemplo, la extensión Live Server de Visual Studio Code) o publicarla en Netlify. Con doble clic sobre index.html el navegador bloquea la lectura de archivos.'
+        : 'No se pudo cargar «' + (a.pdf || 'el artículo') + '». Revisá que el archivo exista en esa ruta.';
+      if (window.console) console.error(err);
     });
-    $('#fbStage').focus({ preventScroll: true });
-    currentArticle = a;
   }
 
   /** Ajusta la altura del lector al espacio libre de la ventana para ver la revista completa sin desplazarse. */
@@ -116,24 +157,25 @@
 
   /** Lectura ampliada (solo lectura): al cerrar, la revista vuelve a la página leída. */
   function zoomPage(a, i) {
-    if (!fb) return;
-    CC.openZoom({ pages: a.pages, title: a.title, index: i, onClose: function (k) {
+    if (!fb || !src) return;
+    CC.openZoom({ source: src, title: a.title, index: i, onClose: function (k) {
       if (fb) { fb.showPage(k); $('#fbStage').focus({ preventScroll: true }); }
     } });
   }
   $('#fbZoom').addEventListener('click', function () { if (fb && currentArticle) zoomPage(currentArticle, fb.currentPage()); });
-  // Los botones laterales no deben robar el foco ni provocar desplazamientos.
-  [prevB, nextB].forEach(function (b) { b.addEventListener('mousedown', function (e) { e.preventDefault(); }); });
   prevB.addEventListener('click', function () { if (fb) fb.prev(); });
   nextB.addEventListener('click', function () { if (fb) fb.next(); });
   range.addEventListener('input', function () { if (fb) fb.goTo(+range.value); });
+  // Los botones laterales no deben robar el foco ni provocar desplazamientos.
+  [prevB, nextB].forEach(function (b) { b.addEventListener('mousedown', function (e) { e.preventDefault(); }); });
 
   function openAuthor(slug) {
     var list = CC.byAuthor(slug);
     show('author');
     if (!list.length) { $('#authorTitle').textContent = 'No encontramos a ese estudiante'; CC.renderCards($('#authorGrid'), []); return; }
-    $('#authorTitle').textContent = 'Artículos de ' + list[0].author;
-    doc.title = 'Artículos de ' + list[0].author + ' · ConCiencia';
+    var name = CC.authorName(slug);
+    $('#authorTitle').textContent = 'Artículos de ' + name;
+    doc.title = 'Artículos de ' + name + ' · ConCiencia';
     CC.renderCards($('#authorGrid'), list);
   }
 
