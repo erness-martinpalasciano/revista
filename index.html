@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7eecb">
+  <meta name="description" content="ConCiencia, la revista científica escrita y diseñada por estudiantes del Club de Ciencia.">
+  <title>Revista Científica · ConCiencia</title>
+  <link rel="icon" type="image/png" href="assets/images/marie.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip" href="#contenido" id="skipLink">Saltar al contenido</a>
+
+  <!-- ENCABEZADO INSTITUCIONAL -->
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="https://clubdecienciascciencias.netlify.app/" aria-label="ConCiencia, ir al inicio del sitio">
+        <span class="logo">ConCiencia</span>
+        <span class="tiles" aria-hidden="true">
+          <span class="tile t-c"><small>6 12.011</small><b>C</b><i>CARBONO</i></span>
+          <span class="tile t-lu"><small>71 174.97</small><b>Lu</b><i>LUTECIO</i></span>
+          <span class="tile t-b"><small>5 10.811</small><b>B</b><i>BORO</i></span>
+        </span>
+      </a>
+      <div class="actions">
+        <button class="round" id="btnSearch" type="button" aria-label="Buscar artículos" aria-expanded="false" aria-controls="searchPanel">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
+        </button>
+        <button class="round" id="btnMenu" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="sidePanel">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="gridband" aria-hidden="true"></div>
+  </header>
+
+  <!-- BUSCADOR -->
+  <section class="search-panel" id="searchPanel" aria-label="Buscador de artículos">
+    <div class="wrap">
+      <form id="searchForm" role="search" autocomplete="off">
+        <label>Autor/a<input type="search" id="qAuthor" placeholder="Nombre del estudiante"></label>
+        <label>Tema o título<input type="search" id="qTopic" placeholder="Ej.: química, cielo…"></label>
+        <label>Fecha de publicación<input type="date" id="qDate"></label>
+        <button type="reset" class="pill" id="qClear">Limpiar</button>
+      </form>
+      <p id="searchCount" class="search-count" role="status" aria-live="polite"></p>
+      <div id="searchResults" class="grid"></div>
+    </div>
+  </section>
+
+  <main id="contenido" tabindex="-1">
+    <!-- VISTA: INICIO (portada + galería) -->
+    <section class="view" id="viewHome">
+      <div class="wrap hero">
+        <p class="eyebrow">Actividades</p>
+        <h1>Revista Científica</h1>
+        <p class="sub">ConCiencia: ciencia contada por estudiantes, para todos.</p>
+      </div>
+
+      <div class="wrap" id="galeria">
+        <h2>Artículos publicados</h2>
+        <div id="gallery" class="grid"></div>
+      </div>
+
+      <div class="wrap about">
+        <h2>Sobre esta actividad</h2>
+        <p>ConCiencia es nuestra revista científica: cada edición está escrita, ilustrada y diseñada por los propios estudiantes del club.</p>
+        <p>Publicamos artículos de divulgación, entrevistas a científicos, reseñas de experimentos y notas sobre ciencia, tecnología y sociedad.</p>
+        <p>Es nuestra forma de practicar la comunicación científica y de acercar la curiosidad a toda la comunidad educativa.</p>
+        <h2>Lo que hacemos</h2>
+        <ul class="what">
+          <li><h3>Artículos</h3><p>Notas de divulgación sobre temas que nos apasionan, redactadas por estudiantes.</p></li>
+          <li><h3>Entrevistas</h3><p>Conversaciones con científicos, docentes y referentes de la comunidad.</p></li>
+          <li><h3>Experimentos</h3><p>Reseñas y resultados de los experimentos que hacemos en el club.</p></li>
+        </ul>
+        <div class="join">
+          <h2>¿Querés participar?</h2>
+          <p>Sumate al Club de Ciencia ConCiencia y viví esta actividad con nosotros.</p>
+          <a class="pill solid" href="https://clubdecienciascciencias.netlify.app/contacto">Sumate al club</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- VISTA: LECTOR DE REVISTA -->
+    <section class="view" id="viewReader" hidden>
+      <div class="wrap">
+        <div class="reader-top">
+          <a class="pill" id="btnBack" href="#/">← Volver a la galería</a>
+          <h2 id="readerTitle"></h2>
+        </div>
+      </div>
+      <div class="fb-stage" id="fbStage" tabindex="0" aria-label="Revista digital. Usá las flechas del teclado, deslizá o hacé clic en los bordes para pasar de página. Doble clic sobre una página para ampliar la lectura.">
+        <button type="button" class="side-arrow left" id="fbPrev" aria-label="Página anterior">‹</button>
+        <div class="fb-book" id="fbBook"></div>
+        <button type="button" class="side-arrow right" id="fbNext" aria-label="Página siguiente">›</button>
+      </div>
+      <div class="wrap">
+        <div class="fb-dock" id="fbDock">
+          <input type="range" id="fbRange" min="0" max="1" value="0" aria-label="Posición en la revista">
+          <span class="fb-indicator" id="fbIndicator" role="status" aria-live="polite"></span>
+          <button type="button" class="pill sm" id="fbZoom" aria-label="Ampliar lectura de la página actual (también con doble clic o doble toque sobre una página)">🔍 Ampliar</button>
+          <button type="button" class="round sm" id="fbSound" aria-pressed="false" aria-label="Silenciar sonido de páginas">🔊</button>
+        </div>
+
+        <section class="author-info" id="authorInfo" aria-label="Información del artículo">
+          <p id="infoAuthor"></p>
+          <p id="infoDate"></p>
+          <a class="pill solid" id="moreByAuthor" href="#/">Más artículos escritos por este/a estudiante</a>
+        </section>
+      </div>
+    </section>
+
+    <!-- VISTA: ARTÍCULOS DE UN AUTOR -->
+    <section class="view" id="viewAuthor" hidden>
+      <div class="wrap">
+        <div class="reader-top">
+          <a class="pill" href="#/">← Volver a la galería</a>
+          <h2 id="authorTitle"></h2>
+        </div>
+        <div id="authorGrid" class="grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- PIE DE PÁGINA -->
+  <footer class="site-footer">
+    <div class="wrap foot">
+      <div class="foot-brand">
+        <span class="logo">ConCiencia</span>
+        <span class="tiles" aria-hidden="true">
+          <span class="tile t-c"><small>6 12.011</small><b>C</b><i>CARBONO</i></span>
+          <span class="tile t-lu"><small>71 174.97</small><b>Lu</b><i>LUTECIO</i></span>
+          <span class="tile t-b"><small>5 10.811</small><b>B</b><i>BORO</i></span>
+        </span>
+        <p>Exploramos el presente para transformar el futuro.</p>
+      </div>
+      <nav aria-label="Actividades">
+        <h3>Actividades</h3>
+        <ul>
+          <li><a href="#/">Revista Científica</a></li>
+          <li><a href="https://clubdecienciascciencias.netlify.app/viajes">Viajes</a></li>
+          <li><a href="https://clubdecienciascciencias.netlify.app/eventos">Eventos</a></li>
+          <li><a href="https://clubdecienciascciencias.netlify.app/proyectos">Proyectos</a></li>
+        </ul>
+      </nav>
+      <nav aria-label="Navegá">
+        <h3>Navegá</h3>
+        <ul>
+          <li><a href="https://clubdecienciascciencias.netlify.app/sobre-nosotros">Sobre Nosotros</a></li>
+          <li><a href="https://clubdecienciascciencias.netlify.app/galeria">Galería</a></li>
+          <li><a href="https://clubdecienciascciencias.netlify.app/contacto">Contacto</a></li>
+        </ul>
+      </nav>
+      <div>
+        <h3>Encontranos</h3>
+        <ul>
+          <li>IPETyM N°84 — Tanti, Córdoba, Argentina</li>
+          <li><a href="mailto:clubdeciencias@ipetym84.com.ar">clubdeciencias@ipetym84.com.ar</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="copy">© 2026 Club de Ciencia ConCiencia · IPETyM N°84, Tanti, Córdoba, Argentina</p>
+  </footer>
+
+  <!-- MENÚ LATERAL -->
+  <div class="overlay" id="overlay"></div>
+  <aside class="side" id="sidePanel" aria-label="Menú principal" aria-hidden="true">
+    <div class="side-head">
+      <span class="logo">ConCiencia</span>
+      <button type="button" class="round sm" id="menuClose" aria-label="Cerrar menú">✕</button>
+    </div>
+    <nav>
+      <ul class="side-list">
+        <li><a href="https://clubdecienciascciencias.netlify.app/">Inicio</a></li>
+        <li><a href="https://clubdecienciascciencias.netlify.app/sobre-nosotros">Sobre Nosotros</a></li>
+        <li>
+          <button type="button" class="acc" id="accAct" aria-expanded="false" aria-controls="subAct">Actividades <span aria-hidden="true">▾</span></button>
+          <ul class="sub" id="subAct">
+            <li><a href="#/" data-close>Revista Científica</a></li>
+            <li><a href="https://clubdecienciascciencias.netlify.app/viajes">Viajes</a></li>
+            <li><a href="https://clubdecienciascciencias.netlify.app/eventos">Eventos</a></li>
+            <li><a href="https://clubdecienciascciencias.netlify.app/proyectos">Proyectos</a></li>
+          </ul>
+        </li>
+        <li><a href="https://clubdecienciascciencias.netlify.app/galeria">Galería</a></li>
+        <li><a href="https://clubdecienciascciencias.netlify.app/contacto">Contacto</a></li>
+        <li><a href="https://clubdecienciascciencias.netlify.app/arcade" aria-label="Arcade">🍎</a></li>
+      </ul>
+      <a class="pill solid wide" href="https://clubdecienciascciencias.netlify.app/contacto">Sumate</a>
+    </nav>
+  </aside>
+
+  <!-- Orden de carga: datos → módulos → arranque -->
+  <script src="js/articles.js"></script>
+  <script src="js/flipbook.js"></script>
+  <script src="js/zoom.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/assistant.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
