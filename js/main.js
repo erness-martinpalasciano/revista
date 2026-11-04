@@ -38,13 +38,17 @@
   var snd = { muted: false, pool: [] };
   for (var i = 1; i <= 4; i++) { var au = new Audio('assets/sounds/page-flip-' + i + '.wav'); au.preload = 'auto'; snd.pool.push(au); }
   try { snd.muted = localStorage.getItem('cc-muted') === '1'; } catch (e) {}
-  /** durMs: duración del giro; el sonido se ajusta para terminar junto con el movimiento. */
-  snd.play = function (durMs) {
+  /** Las muestras tienen un roce suave que crece (~0.17 s) y luego el "golpe de papel" del audio de referencia.
+      durMs: duración del giro (el sonido se acelera/frena para que su parte fuerte caiga en el tramo más rápido).
+      desde: avance de la hoja al empezar el sonido (si ya va avanzada, se salta el roce inicial). */
+  snd.play = function (durMs, desde) {
     if (snd.muted) return;
     var base = snd.pool[Math.floor(Math.random() * snd.pool.length)], a = base.cloneNode();
-    var rate = 0.94 + Math.random() * 0.12;
-    if (durMs && base.duration) rate = Math.max(0.8, Math.min(1.3, base.duration * 1000 / durMs * (0.97 + Math.random() * 0.06)));
-    a.playbackRate = rate; a.volume = 0.5 + Math.random() * 0.15;
+    var rate = 0.97 + Math.random() * 0.06;
+    if (durMs) rate = Math.max(0.8, Math.min(1.25, 0.17 / (0.3 * durMs / 1000) * (0.97 + Math.random() * 0.06)));
+    try { a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false; } catch (e) {}
+    a.playbackRate = rate; a.volume = 0.55 + Math.random() * 0.15;
+    if (desde > 0.25) { try { a.currentTime = 0.15; } catch (e) {} }
     var p = a.play(); if (p && p.catch) p.catch(function () {});
   };
   var btnSound = $('#fbSound');

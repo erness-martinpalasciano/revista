@@ -1,182 +1,112 @@
 /* ==========================================================
-   flipbook.js — Revista digital con hojas de papel que se curvan.
-   Sin dependencias. Mientras una hoja se mueve se descompone en
-   tiras verticales articuladas (16 bisagras): cada tira gira un poco
-   más que la anterior, lo que genera la curvatura del papel. Además:
-   - sombra propia por tira según su inclinación (volumen),
-   - sombra proyectada sobre la página de abajo,
-   - aceleración/desaceleración suaves (curva senoidal),
-   - páginas cargadas a demanda desde una "fuente" (PDF o imágenes).
+   flipbook.js — Revista digital con hoja de papel flexible.
+   Las páginas en reposo son imágenes normales (nítidas). Mientras
+   una hoja se mueve, se dibuja con curl.js (WebGL): se levanta desde
+   la esquina, se pliega en diagonal, se curva sobre un cilindro y se
+   apoya sobre la otra página, con sombra dinámica.
+   El mismo movimiento se usa al arrastrar (la hoja sigue al dedo o al
+   mouse), con clic en los bordes y con el teclado.
    Pantalla ancha: páginas enfrentadas. Angosta: una por vez.
    ========================================================== */
 (function () {
   'use strict';
   var CC = (window.CC = window.CC || {});
-  var BREAK = 820;   // por debajo de este ancho: una sola página
-  var K = 16;        // tiras por hoja durante el giro
-  var BEND = 46;     // curvatura máxima (grados acumulados en el borde libre)
-  var OV = 0.8;      // solape entre tiras para evitar costuras
+  var BREAK = 820;     // por debajo de este ancho: una sola página
+  var LIFT = 0.34;     // cuánto sube la esquina al pasar la hoja (fracción del alto)
+  var DRAG_GAIN = 1.3; // sensibilidad del arrastre
+  var FLIP_MS = 720;   // duración de un giro completo
 
   function el(cls, tag) { var d = document.createElement(tag || 'div'); d.className = cls; return d; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function smooth(x) { return x * x * (3 - 2 * x); }
 
-  /**
-   * o: { stage, book, source, title, sound, onChange(info), onZoom(pageIndex) }
-   * source: ver pdf-source.js (n, ratio, book(i,w))
-   */
+  /** o: { stage, book, source, title, sound, onChange(info), onZoom(pageIndex) } */
   CC.createFlipbook = function (o) {
     var stage = o.stage, book = o.book, src = o.source, n = src.n, RATIO = src.ratio, title = o.title || '';
     var sound = o.sound, notify = o.onChange || function () {};
-    var single = false, leaves = [], t = 0, pw = 0, ph = 0, drag = null, ro = null, timer = 0, lastTap = null;
-    var qW = 0, res = [], castL, castR, dead = false;
+    var single = false, t = 0, pw = 0, ph = 0, qW = 0, dpr = 1, res = [], dead = false, ready = false;
+    var anim = null, queue = [], drag = null, lastTap = null, ro = null, timer = 0, raf = 0, dragRaf = 0;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    function maxT() { return single ? n - 1 : leaves.length; }
+    /* ---------- DOM: dos páginas planas + lienzo para la hoja ---------- */
+    function slot(cls) {
+      var s = { el: el('pg ' + cls), img: new Image(), idx: -1, url: null };
+      s.img.draggable = false; s.img.alt = ''; s.el.appendChild(s.img); book.appendChild(s.el); return s;
+    }
+    book.innerHTML = '';
+    var sL = slot('l'), sR = slot('r');
+    var canvas = el('fb-canvas', 'canvas'); stage.appendChild(canvas);
+    var curl = reduce ? null : CC.createCurl(canvas);
+    if (!curl) canvas.style.display = 'none';
+
+    function maxT() { return single ? n - 1 : Math.ceil(n / 2); }
 
     /* ---------- páginas (carga a demanda) ---------- */
     function need(i) {
       if (i < 0 || i >= n || res[i]) return;
-      var r = res[i] = { url: null };
-      src.book(i, qW).then(function (x) { if (dead) return; r.url = x.url; repaint(i); })
-        .catch(function () { r.err = true; });
+      var r = res[i] = { img: null, url: null };
+      src.book(i, qW).then(function (x) {
+        if (dead) return;
+        var im = new Image(); im.decoding = 'async';
+        im.onload = function () { if (dead || res[i] !== r) return; r.img = im; r.url = x.url; paintSlots(); };
+        im.src = x.url;
+      }).catch(function () {});
     }
     function prefetch() {
-      var c = single ? t : 2 * t, order = [0, -1, 1, 2, 3, -2, 4, 5];
-      order.forEach(function (d) { need(c + d); });
+      var c = single ? t : 2 * t;
+      [0, 1, -1, 2, 3, -2, 4, 5, -3].forEach(function (d) { need(c + d); });
     }
-    function paint(f, idx) {
-      if (idx < 0 || idx >= n) { f.classList.add('blank'); return; }
+    function setSlot(s, idx) {
+      if (idx < 0 || idx >= n) { s.el.style.visibility = 'hidden'; s.idx = -1; return; }
+      s.el.style.visibility = 'visible';
       var r = res[idx];
       if (r && r.url) {
-        var im = f.querySelector('img');
-        if (!im) { im = new Image(); im.draggable = false; im.alt = 'Página ' + (idx + 1) + ' de «' + title + '»'; f.insertBefore(im, f.firstChild); }
-        if (im.getAttribute('src') !== r.url) im.src = r.url;
-        f.classList.remove('loading');
-      } else f.classList.add('loading');
+        if (s.url !== r.url) { s.img.src = r.url; s.url = r.url; }
+        s.img.alt = 'Página ' + (idx + 1) + ' de «' + title + '»';
+        s.img.style.visibility = 'visible'; s.el.classList.remove('loading');
+      } else { s.img.style.visibility = 'hidden'; s.url = null; s.el.classList.add('loading'); }
+      s.idx = idx;
     }
-    function paintStrips(L) {
-      if (!L.strips) return;
-      var rf = res[L.fi], rb = L.bi < n ? res[L.bi] : null;
-      L.strips.forEach(function (s) {
-        s.f.style.backgroundImage = rf && rf.url ? 'url("' + rf.url + '")' : 'none';
-        s.b.style.backgroundImage = rb && rb.url ? 'url("' + rb.url + '")' : 'none';
-      });
-    }
-    function repaint(i) {
-      leaves.forEach(function (L) {
-        if (L.fi === i) { paint(L.fc, i); paintStrips(L); }
-        if (L.bi === i) { paint(L.bc, i); paintStrips(L); }
-      });
-    }
-
-    /* ---------- construcción ---------- */
-    function face(cls) { var d = el('face ' + cls); d.appendChild(el('shade')); return d; }
-
-    function mount(rightIdx) {
-      cancelAll(); book.innerHTML = ''; leaves = [];
-      var count = single ? n : Math.ceil(n / 2);
-      for (var j = 0; j < count; j++) {
-        var L = { el: el('leaf'), flat: el('flat'), fc: face('front'), bc: face('back'), angle: 0, raf: 0, curl: null, strips: null,
-                  fi: single ? j : 2 * j, bi: single ? -1 : 2 * j + 1 };
-        L.fs = L.fc.lastChild; L.bs = L.bc.lastChild;
-        L.flat.appendChild(L.fc); L.flat.appendChild(L.bc); L.el.appendChild(L.flat);
-        book.appendChild(L.el); leaves.push(L);
-        paint(L.fc, L.fi); paint(L.bc, L.bi);
+    /** Qué página muestra cada lado: en reposo según t; durante un giro, lo que hay debajo de la hoja. */
+    function paintSlots() {
+      var L, R;
+      if (anim) {
+        var j = anim.j;
+        L = single ? -1 : (j > 0 ? 2 * j - 1 : -1);
+        R = single ? (j + 1 < n ? j + 1 : -1) : (2 * j + 2 < n ? 2 * j + 2 : -1);
+      } else {
+        L = single ? -1 : (t > 0 ? 2 * t - 1 : -1);
+        R = single ? t : (2 * t < n ? 2 * t : -1);
       }
-      castR = el('cast cast-r'); castL = el('cast cast-l'); book.appendChild(castR); book.appendChild(castL);
-      t = single ? Math.min(rightIdx, n - 1) : Math.min(Math.floor(rightIdx / 2), count);
-      resize(); settle(); update();
+      setSlot(sL, L); setSlot(sR, R);
     }
 
-    function resize() {
+    /* ---------- tamaño y posición ---------- */
+    function layout() {
       var aw = stage.clientWidth, ah = stage.clientHeight;
+      if (!aw || !ah) return false;
+      var s = aw < BREAK;
+      if (ready && s !== single) {                     // cambio de modo: conserva la página que se estaba leyendo
+        var i = single ? t : 2 * t; single = s;
+        t = single ? Math.min(i, n - 1) : Math.min(Math.floor(i / 2), maxT());
+      } else single = s;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
       pw = Math.floor(Math.min(aw / (single ? 1 : 2), ah / RATIO)); ph = Math.floor(pw * RATIO);
-      if (!qW) {
-        var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var big = Math.min(screen.height * 0.85 / RATIO, screen.width / (single ? 1 : 2));
-        qW = Math.max(700, Math.min(1700, Math.round(Math.max(pw, big) * dpr)));
-      }
-      book.style.width = (single ? pw : pw * 2) + 'px'; book.style.height = ph + 'px';
-      leaves.forEach(function (L) {
-        L.el.style.left = (single ? 0 : pw) + 'px'; L.el.style.width = pw + 'px'; L.el.style.height = ph + 'px';
-        if (L.curl) { L.curl.remove(); L.curl = null; L.strips = null; }   // se reconstruye con el nuevo tamaño
-      });
-      [castR, castL].forEach(function (c) { c.style.height = ph + 'px'; });
-      shift();
+      book.style.width = (single ? pw : 2 * pw) + 'px'; book.style.height = ph + 'px';
+      sL.el.style.cssText = 'left:0;width:' + pw + 'px;height:' + ph + 'px;' + (single ? 'display:none' : '');
+      sR.el.style.cssText = 'left:' + (single ? 0 : pw) + 'px;width:' + pw + 'px;height:' + ph + 'px';
+      var w = Math.min(1600, Math.max(400, Math.ceil(pw * dpr / 100) * 100));
+      if (w !== qW) { qW = w; res = []; sL.url = sR.url = null; if (curl) curl.dropAll(); }
+      if (curl) { curl.resize(aw, ah, dpr); curl.clear(); }
+      ready = true; shift(); return true;
     }
-
-    /** Centra la portada (t=0) y la contraportada (t=max), como en una revista real. */
+    /** Centra la portada (t=0) y la contraportada (t=max), como una revista real. */
     function shift() {
       var x = 0;
-      if (!single) { if (t === 0) x = -pw / 2; else if (t === leaves.length) x = pw / 2; }
+      if (!single) { if (t === 0) x = -pw / 2; else if (t >= maxT()) x = pw / 2; }
       book.style.transform = 'translateX(' + x + 'px)';
       book.classList.toggle('at-start', !single && t === 0);
-      book.classList.toggle('at-end', !single && t === leaves.length);
-    }
-
-    /* ---------- hoja curvada (tiras articuladas) ---------- */
-    function buildCurl(L) {
-      var sw = pw / K, root = el('curl'), parent = root; L.strips = [];
-      for (var k = 0; k < K; k++) {
-        var s = el('strip'), f = el('sf'), b = el('sb'), fsh = el('shade'), bsh = el('shade');
-        s.style.width = (sw + OV) + 'px'; s.style.left = (k ? sw : 0) + 'px';
-        f.style.backgroundSize = pw + 'px ' + ph + 'px'; f.style.backgroundPosition = (-k * sw) + 'px 0';
-        b.style.backgroundSize = pw + 'px ' + ph + 'px'; b.style.backgroundPosition = (-(pw - (k + 1) * sw - OV)) + 'px 0';
-        f.appendChild(fsh); b.appendChild(bsh); s.appendChild(f); s.appendChild(b);
-        parent.appendChild(s); parent = s;
-        L.strips.push({ el: s, f: f, b: b, fs: fsh, bs: bsh });
-      }
-      root.style.display = 'none'; L.el.appendChild(root); L.curl = root; paintStrips(L);
-    }
-    function useCurl(L, on) {
-      if (on) { if (!L.curl) buildCurl(L); L.flat.style.display = 'none'; L.curl.style.display = 'block'; }
-      else { if (L.curl) L.curl.style.display = 'none'; L.flat.style.display = 'block'; }
-    }
-
-    /** Aplica el ángulo base de la hoja y, si se está moviendo, su curvatura y sus sombras. */
-    function setAngle(j, a, moving) {
-      var L = leaves[j]; L.angle = a;
-      if (!moving) {
-        L.el.style.transform = 'rotateY(' + a + 'deg)'; L.fs.style.opacity = 0; L.bs.style.opacity = 0; return;
-      }
-      L.el.style.transform = 'translateZ(2px) rotateY(' + a + 'deg)';
-      var p = Math.min(1, Math.abs(a) / 180);
-      // El borde libre se adelanta al levantar la hoja y se atrasa al apoyarla.
-      var d = -BEND * Math.sin(2 * Math.PI * p) / (K - 1);
-      for (var k = 0; k < K; k++) {
-        var S = L.strips[k], phi = (a + k * d) * Math.PI / 180, c = Math.cos(phi), dark = 0.5 * (1 - Math.abs(c));
-        S.el.style.transform = k ? 'rotateY(' + d + 'deg)' : 'none';
-        S.fs.style.opacity = c > 0 ? dark : 0; S.bs.style.opacity = c < 0 ? dark : 0;
-      }
-      castShadow(a);
-    }
-
-    /** Sombra proyectada por la hoja en movimiento sobre la página que queda debajo. */
-    function castShadow(a) {
-      var abs = Math.abs(a), r = abs * Math.PI / 180, s = Math.sin(r), c = Math.cos(r), op = 0.46 * Math.pow(s, 0.8);
-      var right = abs < 90, wR = Math.min(pw, pw * Math.max(c, 0) + pw * 0.16), wL = Math.min(pw, pw * Math.max(-c, 0) + pw * 0.16);
-      castR.style.left = (single ? 0 : pw) + 'px'; castR.style.width = wR + 'px'; castR.style.opacity = right ? op : 0;
-      castL.style.left = (pw - wL) + 'px'; castL.style.width = wL + 'px'; castL.style.opacity = (!single && !right) ? op : 0;
-    }
-    function hideCast() { if (castR) { castR.style.opacity = 0; castL.style.opacity = 0; } }
-    function anyMoving() { return !!drag && drag.moved || leaves.some(function (L) { return L.raf; }); }
-
-    function fixZ(j) { var L = leaves[j]; L.el.style.zIndex = L.angle <= -90 ? j + 1 : leaves.length - j; }
-    function settle() {
-      leaves.forEach(function (L, j) { useCurl(L, false); setAngle(j, j < t ? -180 : 0, false); fixZ(j); }); hideCast();
-    }
-    function cancelAll() { leaves.forEach(function (L) { if (L.raf) cancelAnimationFrame(L.raf); L.raf = 0; }); }
-
-    /** Anima la hoja j hasta el ángulo "to" con arranque y frenado suaves. */
-    function animate(j, to) {
-      var L = leaves[j]; if (L.raf) cancelAnimationFrame(L.raf);
-      var from = L.angle, start = performance.now(), dur = 560 + 520 * Math.abs(to - from) / 180;
-      useCurl(L, true); L.el.style.zIndex = 1000 + j;
-      (function step(now) {
-        var p = Math.min(1, (now - start) / dur), e = (1 - Math.cos(Math.PI * p)) / 2;
-        setAngle(j, from + (to - from) * e, true);
-        if (p < 1) L.raf = requestAnimationFrame(step);
-        else { L.raf = 0; setAngle(j, to, false); useCurl(L, false); fixZ(j); if (!anyMoving()) hideCast(); }
-      })(start);
-      return dur;
+      book.classList.toggle('at-end', !single && t >= maxT());
     }
 
     /* ---------- estado e indicador ---------- */
@@ -188,54 +118,125 @@
       return 'Páginas ' + l + '–' + r + ' de ' + n;
     }
     function update() {
-      shift(); prefetch();
+      shift(); prefetch(); paintSlots();
       notify({ t: t, max: maxT(), label: label(), atStart: t === 0, atEnd: t >= maxT() });
     }
 
-    /* ---------- acciones públicas ---------- */
-    function next() { if (t >= maxT()) return; var j = t++, d = animate(j, -180); if (sound) sound.play(d); update(); }
-    function prev() { if (t <= 0) return; t--; var d = animate(t, 0); if (sound) sound.play(d); update(); }
-    function goTo(k) { t = Math.max(0, Math.min(maxT(), k)); cancelAll(); settle(); update(); }
+    /* ---------- la hoja ---------- */
+    function pageTex(idx) {
+      if (idx < 0 || idx >= n || !res[idx] || !res[idx].img) return curl.paper;
+      return curl.tex(qW + ':' + idx, res[idx].img);
+    }
+    /** Dibuja la hoja en el avance p (0 = plana a la derecha, 1 = plana a la izquierda). */
+    function drawSheet(p) {
+      if (!curl || !anim) return;
+      var br = book.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+      var spineX = br.left - sr.left + (single ? 0 : pw), top = br.top - sr.top;
+      var sinp = Math.sin(Math.PI * p), Oy = anim.Oy;
+      /* El punto que "agarra" la esquina viaja de la derecha (pw) a la izquierda (-pw) elevándose.
+         El doblez es la mediatriz entre la esquina original y ese punto: por eso nace en diagonal
+         (la esquina inferior se adelanta) y termina vertical, junto al lomo. */
+      var qx = pw * (1 - 2 * p);
+      var dev = (-anim.H * sinp * anim.liftK + anim.dy * anim.decay) * Math.min(1, (1 - p) * 6);
+      var qy = Oy + dev, vx = pw - qx, vy = -dev, len = Math.sqrt(vx * vx + vy * vy);
+      var nx = len < 1e-3 ? 1 : vx / len, ny = len < 1e-3 ? 0 : vy / len;
+      var f = nx * (pw + qx) / 2 + ny * (Oy + qy) / 2;
+      var R = pw * (0.014 + 0.115 * Math.pow(sinp, 0.8));      // radio del cilindro: máximo a mitad del giro
+      var alpha = single ? 1 - smooth(clamp((p - 0.55) / 0.45, 0, 1)) : 1;
+      var j = anim.j;
+      curl.draw({
+        n: [nx, ny], f: f, R: R, spine: [spineX, top], size: [pw, ph], alpha: alpha,
+        front: pageTex(single ? j : 2 * j), back: single ? curl.paper : pageTex(2 * j + 1)
+      });
+    }
 
-    /* ---------- arrastre (mouse y táctil) y clics ---------- */
+    /** Anima el avance de la hoja hasta anim.to con arranque y frenado suaves. */
+    function run() {
+      cancelAnimationFrame(raf);
+      function step(now) {
+        if (dead || !anim) return;
+        var x = clamp((now - anim.start) / anim.dur, 0, 1), p = anim.from + (anim.to - anim.from) * smooth(x);
+        anim.decay = 1 - x; drawSheet(p);
+        if (x < 1) { raf = requestAnimationFrame(step); return; }
+        anim = null; paintSlots(); if (curl) curl.clear();
+        if (queue.length) { var q = queue.shift(); begin(q[0], q[1]); }
+      }
+      raf = requestAnimationFrame(step);
+    }
+
+    function begin(dir, y) {
+      if ((dir > 0 && t >= maxT()) || (dir < 0 && t <= 0)) return false;
+      var j = dir > 0 ? t : t - 1;
+      t += dir;
+      if (!curl) { if (sound) sound.play(500, 0); update(); return true; }   // sin WebGL / movimiento reducido: cambio directo
+      anim = { j: j, mode: 'auto', dir: dir, Oy: clamp(y, 0.12 * ph, 0.97 * ph), H: LIFT * ph, liftK: 1, dy: 0, decay: 1,
+               from: dir > 0 ? 0 : 1, to: dir > 0 ? 1 : 0, start: performance.now(), dur: FLIP_MS };
+      if (sound) sound.play(anim.dur, 0);
+      update(); run(); return true;
+    }
+    function flip(dir, y) {
+      if (drag && drag.moved) return;
+      if (anim) { if (queue.length < 2) queue.push([dir, y]); return; }
+      begin(dir, y);
+    }
+    function next(y) { flip(1, y === undefined ? 0.92 * ph : y); }
+    function prev(y) { flip(-1, y === undefined ? 0.92 * ph : y); }
+    function goTo(k) {
+      anim = null; queue = []; cancelAnimationFrame(raf); if (curl) curl.clear();
+      t = clamp(k, 0, maxT()); update();
+    }
+
+    /* ---------- arrastre (la hoja sigue al dedo/mouse) y clics ---------- */
     function onDown(e) {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (e.target.closest && e.target.closest('.side-arrow')) return;
-      drag = { x0: e.clientX, y0: e.clientY, id: e.pointerId, tm: performance.now(), moved: false, dir: 0, j: -1, p: 0 };
+      drag = { x0: e.clientX, y0: e.clientY, id: e.pointerId, tm: performance.now(), moved: false, dir: 0, p: 0, p0: 0 };
     }
     function onMove(e) {
       if (!drag) { hover(e); return; }
       var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
       if (!drag.moved) {
-        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
-        var dir = dx < 0 ? 1 : -1;               // 1: siguiente, -1: anterior
+        if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) || anim || !curl) return;
+        var dir = dx < 0 ? 1 : -1;
         if ((dir === 1 && t >= maxT()) || (dir === -1 && t <= 0)) { drag = null; return; }
-        drag.moved = true; drag.dir = dir; drag.j = dir === 1 ? t : t - 1;
-        var L = leaves[drag.j]; if (L.raf) { cancelAnimationFrame(L.raf); L.raf = 0; }
-        useCurl(L, true); L.el.style.zIndex = 2000;
+        var br = book.getBoundingClientRect();
+        drag.moved = true; drag.dir = dir; drag.p0 = drag.p = dir > 0 ? 0 : 1;
+        anim = { j: dir > 0 ? t : t - 1, mode: 'drag', dir: dir, Oy: clamp(drag.y0 - br.top, 0.12 * ph, 0.97 * ph),
+                 H: LIFT * ph, liftK: 0.7, dy: 0, decay: 1 };
         try { stage.setPointerCapture(drag.id); } catch (x) {}
+        paintSlots();
       }
-      var p = Math.min(1, Math.abs(dx) / (pw * 1.2)); drag.p = p;
-      setAngle(drag.j, drag.dir === 1 ? -180 * p : -180 * (1 - p), true);
+      drag.p = clamp(drag.p0 - DRAG_GAIN * dx / (2 * pw), 0, 1); anim.dy = clamp(dy, -0.4 * ph, 0.4 * ph);
+      if (!dragRaf) dragRaf = requestAnimationFrame(function () { dragRaf = 0; if (anim && drag && drag.moved) drawSheet(drag.p); });
     }
     function onUp(e) {
       if (!drag) return;
       var d = drag; drag = null;
       if (d.moved) {
-        var fast = Math.abs(e.clientX - d.x0) / Math.max(1, performance.now() - d.tm) > 0.45, commit = d.p > 0.3 || fast, dur;
-        if (d.dir === 1) { if (commit) { t++; dur = animate(d.j, -180); if (sound) sound.play(dur); } else animate(d.j, 0); }
-        else { if (commit) { t--; dur = animate(d.j, 0); if (sound) sound.play(dur); } else animate(d.j, -180); }
-        update(); return;
+        var dt = Math.max(1, performance.now() - d.tm), vx = (e.clientX - d.x0) / dt;
+        var fast = Math.abs(vx) > 0.45 && (vx < 0) === (d.dir > 0);
+        var commit = d.dir > 0 ? (d.p > 0.3 || fast) : (d.p < 0.7 || fast);
+        var to = commit ? (d.dir > 0 ? 1 : 0) : (d.dir > 0 ? 0 : 1);
+        anim.mode = 'auto'; anim.from = d.p; anim.to = to; anim.start = performance.now();
+        anim.dur = Math.round(260 + 460 * Math.abs(to - d.p)); anim.decay = 1;
+        if (commit) { t += d.dir; if (sound) sound.play(anim.dur, Math.abs(d.p - d.p0)); }
+        update(); run(); return;
       }
       if (performance.now() - d.tm > 600) return;
       var r = book.getBoundingClientRect(), f = (e.clientX - r.left) / r.width;
       if (e.clientY < r.top || e.clientY > r.bottom || f < 0 || f > 1) return;
-      var z = zone(f);
-      if (z) { lastTap = null; if (z > 0) next(); else prev(); return; }   // bordes: pasar página
-      var now = performance.now();                                          // centro: doble clic / doble toque = ampliar
+      var z = zone(f), y = e.clientY - r.top;
+      if (z) { lastTap = null; if (z > 0) next(y); else prev(y); return; }   // bordes: pasar página
+      var now = performance.now();                                            // centro: doble clic / doble toque = ampliar
       if (lastTap && now - lastTap.t < 350 && Math.abs(e.clientX - lastTap.x) < 30 && Math.abs(e.clientY - lastTap.y) < 30) {
         lastTap = null; var pi = pageAt(f); if (pi >= 0 && o.onZoom) o.onZoom(pi);
       } else lastTap = { t: now, x: e.clientX, y: e.clientY };
+    }
+    function onCancel() {
+      if (drag && drag.moved && anim) {
+        anim.mode = 'auto'; anim.from = drag.p; anim.to = drag.dir > 0 ? 0 : 1; anim.start = performance.now(); anim.dur = 320; anim.decay = 1; run();
+      }
+      drag = null;
     }
     /** Zona lateral de la fracción horizontal f: 1 = siguiente, -1 = anterior, 0 = centro. */
     function zone(f) {
@@ -250,7 +251,7 @@
       return 2 * t < n ? 2 * t : -1;
     }
     function currentPage() { return single ? t : (2 * t < n ? 2 * t : 2 * t - 1); }
-    function showPage(i) { i = Math.max(0, Math.min(n - 1, i)); goTo(single ? i : Math.ceil(i / 2)); }
+    function showPage(i) { i = clamp(i, 0, n - 1); goTo(single ? i : Math.ceil(i / 2)); }
     function hover(e) {
       var r = book.getBoundingClientRect(), z = zone((e.clientX - r.left) / r.width);
       stage.style.cursor = z > 0 ? 'e-resize' : z < 0 ? 'w-resize' : 'grab';
@@ -264,16 +265,11 @@
       else if (e.key === 'Home') { e.preventDefault(); goTo(0); }
       else if (e.key === 'End') { e.preventDefault(); goTo(maxT()); }
     }
-    function onCancel() { if (drag && drag.moved) animate(drag.j, drag.dir === 1 ? 0 : -180); drag = null; }
 
     /* ---------- adaptación a tamaños ---------- */
     function onResize() {
       clearTimeout(timer);
-      timer = setTimeout(function () {
-        if (dead) return;
-        var s = stage.clientWidth < BREAK;
-        if (s !== single) { var idx = single ? t : 2 * t; single = s; mount(idx); } else resize();
-      }, 80);
+      timer = setTimeout(function () { if (dead) return; anim = null; queue = []; if (layout()) update(); }, 80);
     }
 
     stage.addEventListener('pointerdown', onDown);
@@ -283,18 +279,18 @@
     document.addEventListener('keydown', onKey);
     if (window.ResizeObserver) { ro = new ResizeObserver(onResize); ro.observe(stage); } else window.addEventListener('resize', onResize);
 
-    single = stage.clientWidth < BREAK;
-    mount(0);
+    layout(); update();
 
     return {
       next: next, prev: prev, goTo: goTo, showPage: showPage, currentPage: currentPage,
       destroy: function () {
-        dead = true; cancelAll(); clearTimeout(timer);
+        dead = true; cancelAnimationFrame(raf); cancelAnimationFrame(dragRaf); clearTimeout(timer);
         document.removeEventListener('keydown', onKey);
         if (ro) ro.disconnect(); else window.removeEventListener('resize', onResize);
         stage.removeEventListener('pointerdown', onDown); stage.removeEventListener('pointermove', onMove);
         stage.removeEventListener('pointerup', onUp); stage.removeEventListener('pointercancel', onCancel);
-        book.innerHTML = '';
+        if (curl) curl.destroy();
+        canvas.remove(); book.innerHTML = '';
       }
     };
   };

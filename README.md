@@ -16,7 +16,8 @@ revista/
 ├── js/
 │   ├── articles.js         ← ÚNICO lugar donde se registran los artículos
 │   ├── pdf-source.js       ← lee el PDF (páginas, proporciones) con PDF.js
-│   ├── flipbook.js         ← revista 3D: hoja con curvatura, sombras y sonido
+│   ├── curl.js             ← la hoja de papel flexible (WebGL): pliegue diagonal, curvatura, sombras
+│   ├── flipbook.js         ← revista: páginas, arrastre, clic, teclado, sonido
 │   ├── zoom.js             ← lectura ampliada (solo lectura)
 │   ├── search.js           ← buscador por autor, tema/título y fecha
 │   ├── assistant.js        ← Marie Curie: preguntas frecuentes y mensajes
@@ -49,5 +50,10 @@ La cantidad de páginas y sus proporciones (A4 vertical, horizontal, mezcladas) 
 ## Lectura ampliada
 Doble clic (o doble toque) en el centro de una página, o botón «Ampliar». Solo lectura, con scroll; se sale con el botón o Escape y vuelve a la misma página.
 
+## Efecto de página y sonido
+- **Movimiento:** la hoja se levanta desde la esquina inferior, se pliega en diagonal, se curva sobre un cilindro (el radio crece a mitad del giro) y se apoya sobre la otra página con sombra proyectada y sombreado según su inclinación. Al arrastrar, la hoja sigue al dedo o al mouse; con clic en los bordes, flechas laterales o teclado hace el mismo recorrido (un giro completo dura 720 ms; ajustable con `FLIP_MS`, `LIFT` y el radio en `js/flipbook.js`).
+- **Páginas en reposo:** son imágenes normales (nítidas); WebGL solo dibuja la hoja mientras se mueve. Sin WebGL, o con «reducir movimiento» activado en el sistema, el cambio de página es directo (sin animación).
+- **Sonido:** cada `page-flip-N.wav` = roce suave que crece mientras la hoja se levanta + el sonido real tomado del video de referencia. Se reproduce solo al pasar de página, con velocidad y volumen levemente distintos cada vez, y se silencia con el botón 🔊.
+
 ## Tecnologías
-HTML5, CSS3 (3D), JavaScript vanilla y PDF.js (Mozilla, licencia Apache 2.0, en `assets/vendor/pdfjs/`). El efecto de volteo es propio: la hoja se divide en tiras que se curvan, con sombras dinámicas.
+HTML5, CSS3, JavaScript vanilla, WebGL (propio) y PDF.js (Mozilla, licencia Apache 2.0, en `assets/vendor/pdfjs/`).
