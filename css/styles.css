@@ -9,6 +9,7 @@
   --c-purple:#bfa6e8; --c-yellow:#ecd36e; --c-green:#b6dcab;
   --font-script:'Dancing Script','Segoe Script','Brush Script MT','Lucida Handwriting',cursive;
   --font-display:'Playfair Display','Didot','Bodoni MT','Bodoni 72','Georgia','Times New Roman',serif;
+  --ph:#8a8696;
   --font-body:'Nunito','Trebuchet MS','Segoe UI',system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box}
@@ -46,7 +47,22 @@ h2{font-size:clamp(1.9rem,4.5vw,2.6rem)}
 .gridband{height:56px;border-block:2px solid var(--line);
   background:linear-gradient(var(--line) 1px,transparent 1px) 0 0/78px 28px,linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/78px 28px,#fdf3d4;opacity:.8}
 @media(max-width:640px){.logo{font-size:1.9rem}.tile{width:42px;height:60px;border-radius:13px}.tile b{font-size:22px}.tile small{font-size:7px}.tile i{font-size:6px}.tiles{gap:4px}.round{width:48px;height:48px}.brand{gap:6px}.bar{padding:10px 12px}}
-@media(max-width:480px){.tiles .t-lu,.tiles .t-b{display:none}}
+@media(max-width:480px){
+  .bar{padding:8px 10px;gap:8px}
+  .brand{gap:5px;min-width:0;flex:1 1 auto}
+  .logo{font-size:clamp(1.2rem,5.8vw,1.7rem);white-space:nowrap}
+  .tiles{gap:3px;flex:none}
+  .tile{width:clamp(27px,8vw,36px);height:clamp(38px,11.5vw,50px);border-radius:10px;border-width:2px;padding:2px 1px;box-shadow:2px 2px 0 rgba(0,0,0,.12)}
+  .tile small{font-size:clamp(5px,1.6vw,7px)}.tile b{font-size:clamp(15px,5vw,21px)}.tile i{font-size:clamp(4.5px,1.4vw,6px)}
+  .actions{gap:6px;flex:none}
+  .round:not(.sm){width:clamp(34px,10.4vw,42px);height:clamp(34px,10.4vw,42px)}
+  .actions .round svg{width:clamp(17px,5vw,22px);height:clamp(17px,5vw,22px)}
+  body.reading .bar{padding:6px 10px}
+  body.reading .logo{font-size:clamp(1.2rem,5.8vw,1.7rem)}
+  body.reading .tile{width:clamp(27px,8vw,36px);height:clamp(38px,11.5vw,50px);border-radius:10px;padding:2px 1px}
+  body.reading .tile b{font-size:clamp(15px,5vw,21px)}body.reading .tile small{font-size:clamp(5px,1.6vw,7px)}body.reading .tile i{font-size:clamp(4.5px,1.4vw,6px)}
+  body.reading .round:not(.sm){width:clamp(34px,10.4vw,40px);height:clamp(34px,10.4vw,40px)}
+}
 
 /* Botones */
 .pill{display:inline-block;border:3px solid #fff;background:var(--paper);box-shadow:0 0 0 2px var(--line),3px 3px 0 var(--shadow);
@@ -95,7 +111,14 @@ h2{font-size:clamp(1.9rem,4.5vw,2.6rem)}
 .search-panel .wrap{padding:20px 0 4px}
 #searchForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end}
 #searchForm label{display:grid;gap:4px;font-weight:800;font-size:.9rem}
-#searchForm input{font:inherit;padding:11px 14px;border-radius:16px;border:2px solid var(--line);background:#fff;min-width:0}
+#searchForm input{box-sizing:border-box;height:46px;font-family:var(--font-body);font-size:1rem;font-weight:400;font-style:normal;line-height:1.3;letter-spacing:normal;
+  color:var(--ink);padding:0 14px;border-radius:16px;border:2px solid var(--line);background:#fff;min-width:0}
+#searchForm input::placeholder{color:var(--ph);opacity:1;font:inherit}
+/* El "ejemplo" de la fecha (dd/mm/aaaa) se ve igual que los placeholders de título y autor. El calendario no se modifica. */
+#qDate::-webkit-datetime-edit,#qDate::-webkit-datetime-edit-fields-wrapper,#qDate::-webkit-datetime-edit-text,
+#qDate::-webkit-datetime-edit-day-field,#qDate::-webkit-datetime-edit-month-field,#qDate::-webkit-datetime-edit-year-field{font:inherit;padding-block:0}
+#qDate.is-empty,#qDate.is-empty::-webkit-datetime-edit,#qDate.is-empty::-webkit-datetime-edit-text,#qDate.is-empty::-webkit-datetime-edit-day-field,
+#qDate.is-empty::-webkit-datetime-edit-month-field,#qDate.is-empty::-webkit-datetime-edit-year-field{color:var(--ph)}
 .search-count{color:var(--muted);margin:10px 0 0}
 
 /* Lector */

@@ -26,6 +26,7 @@
     var form = document.getElementById('searchForm'), out = document.getElementById('searchResults'), count = document.getElementById('searchCount');
 
     function run() {
+      fd.classList.toggle('is-empty', !fd.value);   // (solo estilo) el ejemplo dd/mm/aaaa se ve como un placeholder
       var q = { author: fa.value, topic: ft.value, date: fd.value }, list = CC.search(q);
       CC.renderCards(out, list);
       var filtering = q.author || q.topic || q.date;

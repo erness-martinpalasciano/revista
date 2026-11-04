@@ -39,7 +39,8 @@
     var curl = reduce ? null : CC.createCurl(canvas);
     if (!curl) canvas.style.display = 'none';
 
-    function maxT() { return single ? n - 1 : Math.ceil(n / 2); }
+    /** Última posición: en doble página, par → portada + (n-2)/2 pliegos + contraportada; impar → termina en un pliego completo. */
+    function maxT() { return single ? n - 1 : Math.floor(n / 2); }
 
     /* ---------- páginas (carga a demanda) ---------- */
     function need(i) {
@@ -98,7 +99,7 @@
       var w = Math.min(1600, Math.max(400, Math.ceil(pw * dpr / 100) * 100));
       if (w !== qW) { qW = w; res = []; sL.url = sR.url = null; if (curl) curl.dropAll(); }
       if (curl) { curl.resize(aw, ah, dpr); curl.clear(); }
-      ready = true; shift(); return true;
+      ready = true; shift(); paintSlots(); return true;
     }
     /** Centra la portada (t=0) y la contraportada (t=max), como una revista real. */
     function shift() {
@@ -150,15 +151,23 @@
       });
     }
 
+    /** Termina cualquier giro/arrastre y deja la revista en su estado de reposo (nunca queda un cuadro congelado). */
+    function endAnim() {
+      cancelAnimationFrame(raf); cancelAnimationFrame(dragRaf); raf = dragRaf = 0;
+      anim = null; drag = null;
+      paintSlots(); if (curl) curl.clear();
+    }
+
     /** Anima el avance de la hoja hasta anim.to con arranque y frenado suaves. */
     function run() {
       cancelAnimationFrame(raf);
       function step(now) {
-        if (dead || !anim) return;
+        if (dead) return;
+        if (!anim) { if (curl) curl.clear(); return; }
         var x = clamp((now - anim.start) / anim.dur, 0, 1), p = anim.from + (anim.to - anim.from) * smooth(x);
-        anim.decay = 1 - x; drawSheet(p);
+        try { anim.decay = 1 - x; drawSheet(p); } catch (err) { x = 1; if (window.console) console.warn(err); }
         if (x < 1) { raf = requestAnimationFrame(step); return; }
-        anim = null; paintSlots(); if (curl) curl.clear();
+        endAnim();
         if (queue.length) { var q = queue.shift(); begin(q[0], q[1]); }
       }
       raf = requestAnimationFrame(step);
@@ -182,7 +191,7 @@
     function next(y) { flip(1, y === undefined ? 0.92 * ph : y); }
     function prev(y) { flip(-1, y === undefined ? 0.92 * ph : y); }
     function goTo(k) {
-      anim = null; queue = []; cancelAnimationFrame(raf); if (curl) curl.clear();
+      queue = []; endAnim();
       t = clamp(k, 0, maxT()); update();
     }
 
@@ -206,6 +215,7 @@
         try { stage.setPointerCapture(drag.id); } catch (x) {}
         paintSlots();
       }
+      if (!anim) return;
       drag.p = clamp(drag.p0 - DRAG_GAIN * dx / (2 * pw), 0, 1); anim.dy = clamp(dy, -0.4 * ph, 0.4 * ph);
       if (!dragRaf) dragRaf = requestAnimationFrame(function () { dragRaf = 0; if (anim && drag && drag.moved) drawSheet(drag.p); });
     }
@@ -213,6 +223,7 @@
       if (!drag) return;
       var d = drag; drag = null;
       if (d.moved) {
+        if (!anim) { update(); return; }
         var dt = Math.max(1, performance.now() - d.tm), vx = (e.clientX - d.x0) / dt;
         var fast = Math.abs(vx) > 0.45 && (vx < 0) === (d.dir > 0);
         var commit = d.dir > 0 ? (d.p > 0.3 || fast) : (d.p < 0.7 || fast);
@@ -238,6 +249,7 @@
       }
       drag = null;
     }
+    function onHide() { if (document.hidden || drag) onCancel(); }
     /** Zona lateral de la fracción horizontal f: 1 = siguiente, -1 = anterior, 0 = centro. */
     function zone(f) {
       var E = single ? 0.22 : 0.18;
@@ -269,7 +281,7 @@
     /* ---------- adaptación a tamaños ---------- */
     function onResize() {
       clearTimeout(timer);
-      timer = setTimeout(function () { if (dead) return; anim = null; queue = []; if (layout()) update(); }, 80);
+      timer = setTimeout(function () { if (dead) return; queue = []; endAnim(); if (layout()) update(); }, 80);
     }
 
     stage.addEventListener('pointerdown', onDown);
@@ -277,6 +289,9 @@
     stage.addEventListener('pointerup', onUp);
     stage.addEventListener('pointercancel', onCancel);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('pointerup', onUp);          // suelta fuera del lector: el giro igualmente se completa
+    window.addEventListener('pointercancel', onCancel);
+    window.addEventListener('blur', onHide); document.addEventListener('visibilitychange', onHide);
     if (window.ResizeObserver) { ro = new ResizeObserver(onResize); ro.observe(stage); } else window.addEventListener('resize', onResize);
 
     layout(); update();
@@ -286,6 +301,8 @@
       destroy: function () {
         dead = true; cancelAnimationFrame(raf); cancelAnimationFrame(dragRaf); clearTimeout(timer);
         document.removeEventListener('keydown', onKey);
+        window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('blur', onHide); document.removeEventListener('visibilitychange', onHide);
         if (ro) ro.disconnect(); else window.removeEventListener('resize', onResize);
         stage.removeEventListener('pointerdown', onDown); stage.removeEventListener('pointermove', onMove);
         stage.removeEventListener('pointerup', onUp); stage.removeEventListener('pointercancel', onCancel);

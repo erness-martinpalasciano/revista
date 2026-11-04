@@ -106,7 +106,7 @@
     if (a.authors.length === 1) {
       box.innerHTML = '<a class="pill solid" href="#/autor/' + a.authorSlugs[0] + '">Más artículos escritos por este/a estudiante</a>';
     } else {
-      box.innerHTML = '<p class="more-label">Más artículos escritos por estos/as estudiantes:</p><div class="more-list">' +
+      box.innerHTML = '<p class="more-label">' + esc(a.relatedLabel || 'Más artículos escritos por estos/as estudiantes:') + '</p><div class="more-list">' +
         a.authors.map(function (n, i) { return '<a class="pill solid" href="#/autor/' + a.authorSlugs[i] + '">' + esc(n) + '</a>'; }).join('') + '</div>';
     }
   }

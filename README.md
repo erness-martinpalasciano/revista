@@ -57,3 +57,7 @@ Doble clic (o doble toque) en el centro de una página, o botón «Ampliar». So
 
 ## Tecnologías
 HTML5, CSS3, JavaScript vanilla, WebGL (propio) y PDF.js (Mozilla, licencia Apache 2.0, en `assets/vendor/pdfjs/`).
+
+## Notas
+- `relatedLabel` (opcional, en `articles.js`): encabezado propio de «Más artículos…» para un artículo (hoy solo el 00: «Más artículos escritos por estos profesores:»).
+- Extremos de la revista: con cantidad par de páginas termina en la contraportada; con cantidad impar termina en el último pliego completo (sin página en blanco).

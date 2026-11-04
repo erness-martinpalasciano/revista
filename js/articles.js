@@ -18,6 +18,7 @@
       authors: ['Eduardo Zorzoli', 'Gustavo Fernández', 'Agustín Moya'],
       date: '06/11/2026',                         // DD/MM/AAAA (también acepta AAAA-MM-DD)
       category: 'Institucional',
+      relatedLabel: 'Más artículos escritos por estos profesores:', // opcional: encabezado propio de la sección "más artículos"
       cover: 'assets/images/article-00-cover.jpg', // opcional: si falta, se genera con la página 1 del PDF
       pdf: 'assets/articles/article-00.pdf'
     }
