@@ -25,7 +25,7 @@
     var stage = o.stage, book = o.book, src = o.source, n = src.n, RATIO = src.ratio, title = o.title || '';
     var sound = o.sound, notify = o.onChange || function () {};
     var single = false, t = 0, pw = 0, ph = 0, qW = 0, dpr = 1, res = [], dead = false, ready = false;
-    var anim = null, queue = [], drag = null, lastTap = null, ro = null, timer = 0, raf = 0, dragRaf = 0;
+    var anim = null, queue = [], drag = null, lastTap = null, ro = null, timer = 0, raf = 0, dragRaf = 0, dirty = false, guard = 0;
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     /* ---------- DOM: dos páginas planas + lienzo para la hoja ---------- */
@@ -126,11 +126,12 @@
     /* ---------- la hoja ---------- */
     function pageTex(idx) {
       if (idx < 0 || idx >= n || !res[idx] || !res[idx].img) return curl.paper;
-      return curl.tex(qW + ':' + idx, res[idx].img);
+      try { return curl.tex(qW + ':' + idx, res[idx].img); } catch (e) { return curl.paper; }
     }
     /** Dibuja la hoja en el avance p (0 = plana a la derecha, 1 = plana a la izquierda). */
     function drawSheet(p) {
       if (!curl || !anim) return;
+      dirty = true;
       var br = book.getBoundingClientRect(), sr = stage.getBoundingClientRect();
       var spineX = br.left - sr.left + (single ? 0 : pw), top = br.top - sr.top;
       var sinp = Math.sin(Math.PI * p), Oy = anim.Oy;
@@ -154,13 +155,35 @@
     /** Termina cualquier giro/arrastre y deja la revista en su estado de reposo (nunca queda un cuadro congelado). */
     function endAnim() {
       cancelAnimationFrame(raf); cancelAnimationFrame(dragRaf); raf = dragRaf = 0;
-      anim = null; drag = null;
+      anim = null; drag = null; dirty = false;
       paintSlots(); if (curl) curl.clear();
+    }
+    /** Cierra un arrastre pendiente (sin importar cómo se interrumpió): completa o revierte según hasta dónde llegó la hoja. */
+    function settleDrag() {
+      var d = drag; drag = null;
+      if (!anim || anim.mode !== 'drag') { if (anim && anim.mode !== 'auto') endAnim(); return; }
+      var p = d && typeof d.p === 'number' ? d.p : (anim.dir > 0 ? 0 : 1);
+      var commit = anim.dir > 0 ? p > 0.3 : p < 0.7;
+      var to = commit ? (anim.dir > 0 ? 1 : 0) : (anim.dir > 0 ? 0 : 1);
+      anim.mode = 'auto'; anim.from = p; anim.to = to; anim.start = performance.now();
+      anim.dur = Math.round(260 + 460 * Math.abs(to - p)); anim.decay = 1;
+      if (commit) t += anim.dir;
+      update(); run();
+    }
+    /** Vigilante: si por cualquier motivo el estado queda incoherente (puntero perdido, cuadro de animación que no llega), se recompone solo. */
+    function watch() {
+      if (dead) return;
+      var now = performance.now();
+      if (anim && anim.mode === 'drag' && !(drag && drag.moved)) settleDrag();
+      else if (anim && anim.mode === 'auto' && now > anim.start + anim.dur + 500) { endAnim(); if (queue.length) { var q = queue.shift(); begin(q[0], q[1]); } }
+      else if (!anim && dirty) endAnim();
     }
 
     /** Anima el avance de la hoja hasta anim.to con arranque y frenado suaves. */
     function run() {
       cancelAnimationFrame(raf);
+      var mine = anim; clearTimeout(guard);
+      guard = setTimeout(function () { if (!dead && anim === mine && mine) { endAnim(); if (queue.length) { var q = queue.shift(); begin(q[0], q[1]); } } }, anim.dur + 700);
       function step(now) {
         if (dead) return;
         if (!anim) { if (curl) curl.clear(); return; }
@@ -184,6 +207,7 @@
       update(); run(); return true;
     }
     function flip(dir, y) {
+      if (anim && anim.mode === 'drag' && !(drag && drag.moved)) settleDrag();
       if (drag && drag.moved) return;
       if (anim) { if (queue.length < 2) queue.push([dir, y]); return; }
       begin(dir, y);
@@ -199,10 +223,13 @@
     function onDown(e) {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       if (e.target.closest && e.target.closest('.side-arrow')) return;
+      if (drag && drag.moved) settleDrag();           // segundo dedo / puntero nuevo: primero se cierra el arrastre anterior
+      else if (anim && anim.mode === 'drag') settleDrag();
       drag = { x0: e.clientX, y0: e.clientY, id: e.pointerId, tm: performance.now(), moved: false, dir: 0, p: 0, p0: 0 };
     }
     function onMove(e) {
       if (!drag) { hover(e); return; }
+      if (e.pointerId !== drag.id) return;            // ignora otros punteros mientras hay uno activo
       var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
       if (!drag.moved) {
         if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy) || anim || !curl) return;
@@ -221,6 +248,7 @@
     }
     function onUp(e) {
       if (!drag) return;
+      if (e.pointerId !== undefined && e.pointerId !== drag.id) return;
       var d = drag; drag = null;
       if (d.moved) {
         if (!anim) { update(); return; }
@@ -243,11 +271,11 @@
         lastTap = null; var pi = pageAt(f); if (pi >= 0 && o.onZoom) o.onZoom(pi);
       } else lastTap = { t: now, x: e.clientX, y: e.clientY };
     }
-    function onCancel() {
-      if (drag && drag.moved && anim) {
-        anim.mode = 'auto'; anim.from = drag.p; anim.to = drag.dir > 0 ? 0 : 1; anim.start = performance.now(); anim.dur = 320; anim.decay = 1; run();
-      }
+    function onCancel(e) {
+      if (e && e.pointerId !== undefined && drag && e.pointerId !== drag.id) return;
+      if (drag && drag.moved && anim) { settleDrag(); return; }
       drag = null;
+      if (anim && anim.mode === 'drag') settleDrag();
     }
     function onHide() { if (document.hidden || drag) onCancel(); }
     /** Zona lateral de la fracción horizontal f: 1 = siguiente, -1 = anterior, 0 = centro. */
@@ -291,21 +319,23 @@
     document.addEventListener('keydown', onKey);
     window.addEventListener('pointerup', onUp);          // suelta fuera del lector: el giro igualmente se completa
     window.addEventListener('pointercancel', onCancel);
+    stage.addEventListener('lostpointercapture', onCancel);
     window.addEventListener('blur', onHide); document.addEventListener('visibilitychange', onHide);
     if (window.ResizeObserver) { ro = new ResizeObserver(onResize); ro.observe(stage); } else window.addEventListener('resize', onResize);
 
     layout(); update();
+    var watcher = setInterval(watch, 400);
 
     return {
       next: next, prev: prev, goTo: goTo, showPage: showPage, currentPage: currentPage,
       destroy: function () {
-        dead = true; cancelAnimationFrame(raf); cancelAnimationFrame(dragRaf); clearTimeout(timer);
+        dead = true; cancelAnimationFrame(raf); cancelAnimationFrame(dragRaf); clearTimeout(timer); clearTimeout(guard); clearInterval(watcher);
         document.removeEventListener('keydown', onKey);
         window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
         window.removeEventListener('blur', onHide); document.removeEventListener('visibilitychange', onHide);
         if (ro) ro.disconnect(); else window.removeEventListener('resize', onResize);
         stage.removeEventListener('pointerdown', onDown); stage.removeEventListener('pointermove', onMove);
-        stage.removeEventListener('pointerup', onUp); stage.removeEventListener('pointercancel', onCancel);
+        stage.removeEventListener('pointerup', onUp); stage.removeEventListener('pointercancel', onCancel); stage.removeEventListener('lostpointercapture', onCancel);
         if (curl) curl.destroy();
         canvas.remove(); book.innerHTML = '';
       }

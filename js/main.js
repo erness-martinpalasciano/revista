@@ -124,6 +124,13 @@
     $('#infoDate').hidden = !a.dateText;
     moreBy(a);
     $('#authorInfo').hidden = !a.authors.length && !a.dateText;
+    // Descarga: el PDF original de ESTE artículo, con su título como nombre de archivo.
+    var dl = $('#fbDownload');
+    if (a.pdf) {
+      dl.href = encodeURI(a.pdf);
+      dl.setAttribute('download', (a.title.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim() || 'articulo-' + a.id) + '.pdf');
+      dl.hidden = false;
+    } else { dl.hidden = true; dl.removeAttribute('href'); }
     range.max = 1; range.value = 0; $('#fbIndicator').textContent = '';
     prevB.disabled = nextB.disabled = true;
     status.hidden = false; status.textContent = 'Cargando revista…';

@@ -61,3 +61,4 @@ HTML5, CSS3, JavaScript vanilla, WebGL (propio) y PDF.js (Mozilla, licencia Apac
 ## Notas
 - `relatedLabel` (opcional, en `articles.js`): encabezado propio de «Más artículos…» para un artículo (hoy solo el 00: «Más artículos escritos por estos profesores:»).
 - Extremos de la revista: con cantidad par de páginas termina en la contraportada; con cantidad impar termina en el último pliego completo (sin página en blanco).
+- **Descargar PDF:** el botón ⬇ (a la izquierda de la barra de control del lector) descarga el PDF original del artículo abierto, con el título como nombre de archivo. Se toma de `pdf` en `articles.js`; si un artículo no tiene PDF, el botón no aparece.

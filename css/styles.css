@@ -145,6 +145,11 @@ body.reading .logo{font-size:2rem}body.reading .round:not(.sm){width:46px;height
 .fb-book.at-start::before,.fb-book.at-end::after{opacity:0}
 .fb-dock{display:flex;align-items:center;gap:12px;max-width:760px;margin:10px auto 0}
 .fb-dock input[type=range]{flex:1;accent-color:var(--violet);min-width:60px}
+.dl{color:var(--purple);text-decoration:none;position:relative;flex:none}
+.dl[hidden]{display:none}
+.dl::after{content:attr(data-tip);position:absolute;left:0;bottom:calc(100% + 8px);background:var(--ink);color:#fff;font:700 .78rem/1 var(--font-body);
+  padding:7px 10px;border-radius:9px;white-space:nowrap;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .15s,transform .15s}
+.dl:hover::after,.dl:focus-visible::after,.dl:active::after{opacity:1;transform:none}
 .fb-indicator{font-weight:800;color:var(--purple);white-space:nowrap;font-size:.95rem}
 .pill.sm{padding:6px 14px;font-size:.9rem;white-space:nowrap}
 .side-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:5000;width:52px;height:52px;border-radius:50%;border:3px solid #fff;
@@ -245,3 +250,23 @@ body.zooming{overflow:hidden}
 .pg.r::after{background:linear-gradient(90deg,rgba(0,0,0,.26),rgba(0,0,0,0) 7%,rgba(0,0,0,0) 94%,rgba(0,0,0,.05))}
 .pg.loading::before{content:"Cargando página…";position:absolute;inset:0;display:grid;place-items:center;color:#8a8696;font-size:clamp(11px,1.4vw,15px)}
 .fb-canvas{position:absolute;left:0;top:0;pointer-events:none;z-index:10}
+
+/* Barra de control en celulares: descarga · indicador · ampliar · sonido en una fila, y el deslizador debajo */
+@media(max-width:640px){
+  .fb-dock{gap:6px}
+  .fb-indicator{font-size:.82rem;flex:1;text-align:center;min-width:0;white-space:normal;line-height:1.15}
+  #fbZoom .lbl{display:none}
+  #fbZoom{width:44px;height:44px;padding:0;border-radius:50%;display:grid;place-items:center}
+  body.reading .marie-fab{width:56px;height:56px}
+  body.reading .fb-dock{padding-right:64px}
+  .dl::after{left:0}
+}
+
+/* Encabezado en modo lectura (celulares): debe ir después de las reglas generales de body.reading */
+@media(max-width:480px){
+  body.reading .bar{padding:6px 10px}
+  body.reading .logo{font-size:clamp(1.2rem,5.8vw,1.7rem)}
+  body.reading .tile{width:clamp(27px,8vw,36px);height:clamp(38px,11.5vw,50px);border-radius:10px;padding:2px 1px}
+  body.reading .tile b{font-size:clamp(15px,5vw,21px)}body.reading .tile small{font-size:clamp(5px,1.6vw,7px)}body.reading .tile i{font-size:clamp(4.5px,1.4vw,6px)}
+  body.reading .round:not(.sm){width:clamp(34px,10.4vw,40px);height:clamp(34px,10.4vw,40px)}
+}
